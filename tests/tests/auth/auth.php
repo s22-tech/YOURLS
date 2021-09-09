@@ -5,13 +5,13 @@
  *
  * @group auth
  */
-class Auth_Func_Tests extends PHPUnit_Framework_TestCase {
+class Auth_Func_Tests extends PHPUnit\Framework\TestCase {
 
     protected static $random_password;
 
     protected static $yourls_user_passwords_copy;
 
-    public static function setUpBeforeClass() {
+    public static function setUpBeforeClass(): void {
         global $yourls_user_passwords;
         self::$yourls_user_passwords_copy = $yourls_user_passwords;
 
@@ -27,7 +27,7 @@ class Auth_Func_Tests extends PHPUnit_Framework_TestCase {
         $yourls_user_passwords['random_phpass2'] = $phpassword_2;
     }
 
-    public static function tearDownAfterClass() {
+    public static function tearDownAfterClass(): void {
         global $yourls_user_passwords;
         $yourls_user_passwords = self::$yourls_user_passwords_copy;
     }
@@ -150,7 +150,7 @@ class Auth_Func_Tests extends PHPUnit_Framework_TestCase {
      */
     public function test_hash_passwords_now() {
         // If local: make a copy of user/config-sample.php to user/config-test.php in case tests not run on a clean install
-        // on Travis: just proceed with user/config-sample.php since there's always a `git clone` first
+        // on Github: just proceed with user/config-sample.php since there's always a `git clone` first
         if( yut_is_local() ) {
             if( !copy( YOURLS_USERDIR . '/config-sample.php', YOURLS_USERDIR . '/config-test.php' ) ) {
                 // Copy failed, we cannot run this test.
@@ -203,5 +203,59 @@ class Auth_Func_Tests extends PHPUnit_Framework_TestCase {
         exec( YOURLS_PHP_BIN . ' -l ' .  escapeshellarg( $config_file ), $output, $return );
         $this->assertEquals( 0, $return );
     }
+
+    /**
+     * Check that we hash passwords by default
+     */
+    public function test_maybe_hash_passwords_clear_passwords() {
+        global $yourls_user_passwords;
+        $copy = $yourls_user_passwords;
+
+        $yourls_user_passwords = [];
+        $yourls_user_passwords['ozh'] = 'ozh';
+
+        $this->assertTrue( yourls_maybe_hash_passwords() );
+
+        $yourls_user_passwords = $copy;
+    }
+
+    /**
+     * Check that we don't hash passwords in config file if there's nothing to hash
+     */
+    public function test_maybe_hash_passwords_no_clear_password() {
+        global $yourls_user_passwords;
+        $copy = $yourls_user_passwords;
+
+        $yourls_user_passwords = array();
+        $yourls_user_passwords['md5'] = $copy['md5'];
+
+        $this->assertFalse( yourls_maybe_hash_passwords() );
+
+        $yourls_user_passwords = $copy;
+    }
+
+    /**
+     * Check that we don't hash passwords in config file if user explicitly doesn't want it
+     *
+     * Actually we're not testing this :-(
+     */
+    public function zz_test_maybe_hash_passwords_YOURLS_NO_HASH_PASSWORD() {
+        // we're not testing anything because it currently relies on a defined constant
+    }
+
+    /**
+     * Check that we don't hash passwords in config file if USER/PWD provided by env
+     */
+    public function test_maybe_hash_passwords_via_env() {
+        putenv('YOURLS_USER=ozh');
+        putenv('YOURLS_PASSWORD=ozh');
+
+        $this->assertFalse( yourls_maybe_hash_passwords() );
+
+        putenv('YOURLS_USER');
+        putenv('YOURLS_PASSWORD');
+    }
+
+
 
 }

@@ -10,7 +10,7 @@ function yourls_html_logo() {
 	<header role="banner">
 	<h1>
 		<a href="<?php echo yourls_admin_url( 'index.php' ) ?>" title="YOURLS"><span>YOURLS</span>: <span>Y</span>our <span>O</span>wn <span>URL</span> <span>S</span>hortener<br/>
-		<img src="<?php yourls_site_url(); ?>/images/yourls-logo.svg" id="yourls-logo" alt="YOURLS" title="YOURLS" /></a>
+		<img src="<?php yourls_site_url(); ?>/images/yourls-logo.svg?v=<?php echo YOURLS_VERSION; ?>" id="yourls-logo" alt="YOURLS" title="YOURLS" /></a>
 	</h1>
 	</header>
 	<?php
@@ -59,6 +59,7 @@ function yourls_html_head( $context = 'index', $title = '' ) {
 	// Force no cache for all admin pages
 	if( yourls_is_admin() && !headers_sent() ) {
         yourls_no_cache_headers();
+        yourls_no_frame_header();
 		yourls_content_type_header( yourls_apply_filter( 'html_head_content-type', 'text/html' ) );
 		yourls_do_action( 'admin_headers', $context, $title );
 	}
@@ -84,7 +85,7 @@ function yourls_html_head( $context = 'index', $title = '' ) {
 	<meta name="generator" content="YOURLS <?php echo YOURLS_VERSION ?>" />
 	<meta name="description" content="YOURLS &raquo; Your Own URL Shortener' | <?php yourls_site_url(); ?>" />
 	<?php yourls_do_action('html_head_meta', $context); ?>
-	<link rel="shortcut icon" href="<?php yourls_get_yourls_favicon_url(); ?>" />
+    <?php yourls_html_favicon(); ?>
 	<script src="<?php yourls_site_url(); ?>/js/jquery-3.5.1.min.js?v=<?php echo YOURLS_VERSION; ?>" type="text/javascript"></script>
 	<script src="<?php yourls_site_url(); ?>/js/common.js?v=<?php echo YOURLS_VERSION; ?>" type="text/javascript"></script>
 	<script src="<?php yourls_site_url(); ?>/js/jquery.notifybar.js?v=<?php echo YOURLS_VERSION; ?>" type="text/javascript"></script>
@@ -519,8 +520,8 @@ RETURN;
  *
  * @return string HTML of the edit row
  */
-function yourls_table_add_row( $keyword, $url, $title = '', $ip, $clicks, $timestamp ) {
-    $keyword  = yourls_sanitize_keyword($keyword);
+function yourls_table_add_row( $keyword, $url, $title, $ip, $clicks, $timestamp ) {
+	$keyword  = yourls_sanitize_keyword($keyword);
 	$id       = yourls_string2htmlid( $keyword ); // used as HTML #id
 	$shorturl = yourls_link( $keyword );
 
@@ -650,7 +651,7 @@ function yourls_table_head() {
 		'actions'  => yourls__( 'Actions' )
 	) );
 	foreach( $cells as $k => $v ) {
-		echo "<th id='main_table_head_$k'>$v</th>\n";
+		echo "<th id='main_table_head_$k'><span>$v</span></th>\n";
 	}
 
 	$end = "</tr></thead>\n";
@@ -725,6 +726,7 @@ function yourls_login_screen( $error_msg = '' ) {
 				yourls_do_action( 'login_form_bottom' );
 			?>
 			<p style="text-align: right;">
+			    <?php yourls_nonce_field('admin_login'); ?>
 				<input type="submit" id="submit" name="submit" value="<?php yourls_e( 'Login' ); ?>" class="button" />
 			</p>
 			<?php
@@ -921,29 +923,6 @@ function yourls_new_core_version_notice() {
 }
 
 /**
- * Get search text from query string variables search_protocol, search_slashes and search
- *
- * Some servers don't like query strings containing "(ht|f)tp(s)://". A javascript bit
- * explodes the search text into protocol, slashes and the rest (see JS function
- * split_search_text_before_search()) and this function glues pieces back together
- * See issue https://github.com/YOURLS/YOURLS/issues/1576
- *
- * @since 1.7
- * @return string Search string
- */
-function yourls_get_search_text() {
-	$search = '';
-	if( isset( $_GET['search_protocol'] ) )
-		$search .= $_GET['search_protocol'];
-	if( isset( $_GET['search_slashes'] ) )
-		$search .= $_GET['search_slashes'];
-	if( isset( $_GET['search'] ) )
-		$search .= $_GET['search'];
-
-	return htmlspecialchars( trim( $search ) );
-}
-
-/**
  * Display or return HTML for a bookmarklet link
  *
  * @since 1.7.1
@@ -983,3 +962,20 @@ function yourls_set_html_context($context) {
 function yourls_get_html_context() {
     yourls_get_db()->get_html_context();
 }
+
+/**
+ * Print HTML link for favicon
+ *
+ * @since 1.7.10
+ * @return mixed|void
+ */
+function yourls_html_favicon() {
+    // Allow plugins to short-circuit the whole function
+    $pre = yourls_apply_filter( 'shunt_html_favicon', false );
+    if ( false !== $pre ) {
+        return $pre;
+    }
+
+    printf( '<link rel="shortcut icon" href="%s" />', yourls_get_yourls_favicon_url(false) );
+}
+

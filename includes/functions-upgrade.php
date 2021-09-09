@@ -3,8 +3,25 @@
 /**
  * Upgrade YOURLS and DB schema
  *
+ * Note to devs : prefer update function names using the SQL version, eg yourls_update_to_506(),
+ * rather than using the YOURLS version number, eg yourls_update_to_18(). This is to allow having
+ * multiple SQL update during the dev cycle of the same Y0URLS version
+ *
  */
 function yourls_upgrade( $step, $oldver, $newver, $oldsql, $newsql ) {
+
+    /**
+     *  Sanitize input. Two notes :
+     *  - they should already be sanitized in the caller, eg admin/upgrade.php
+     *    (but hey, let's make sure)
+     *  - some vars may not be used at the moment
+     *    (and this is ok, they are here in case a future upgrade procedure needs them)
+     */
+    $step   = intval($step);
+    $oldsql = intval($oldsql);
+    $newsql = intval($newsql);
+    $oldver = yourls_sanitize_version($oldver);
+    $newver = yourls_sanitize_version($newver);
 
     yourls_maintenance_mode(true);
 
@@ -30,8 +47,20 @@ function yourls_upgrade( $step, $oldver, $newver, $oldsql, $newsql ) {
 		if( $oldsql < 482 )
 			yourls_upgrade_482(); // that was somewhere 1.5 and 1.5.1 ...
 
-		if( $oldsql < 505 )
-			yourls_upgrade_to_18();
+		if( $oldsql < 506 ) {
+            /**
+             * 505 was the botched update with the wrong collation, see #2766
+             * 506 is the updated collation.
+             * We want :
+             *      people on 505 to update to 506
+             *      people before 505 to update to the FIXED complete upgrade
+             */
+			if( $oldsql == 505 ) {
+                yourls_upgrade_505_to_506();
+            } else {
+                yourls_upgrade_to_506();
+            }
+        }
 
 		yourls_redirect_javascript( yourls_admin_url( "upgrade.php?step=3" ) );
 
@@ -48,34 +77,57 @@ function yourls_upgrade( $step, $oldver, $newver, $oldsql, $newsql ) {
 
 /************************** 1.6 -> 1.8 **************************/
 
-function yourls_upgrade_to_18() {
+/**
+ * Update to 506, just the fix for people who had updated to master on 1.7.10
+ *
+ */
+function yourls_upgrade_505_to_506() {
+    echo "<p>Updating DB. Please wait...</p>";
+	// Fix collation which was wrongly set at first to utf8mb4_unicode_ci
+	$query = sprintf('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;', YOURLS_DB_TABLE_URL);
+
+    try {
+        yourls_get_db()->perform($query);
+    } catch (\Exception $e) {
+        echo "<p class='error'>Unable to update the DB.</p>";
+        echo "<p>Could not change collation. You will have to fix things manually :(. The error was
+        <pre>";
+        echo $e->getMessage();
+        echo "/n</pre>";
+        die();
+    }
+
+    echo "<p class='success'>OK!</p>";
+}
+
+/**
+ * Update to 506
+ *
+ */
+function yourls_upgrade_to_506() {
     $ydb = yourls_get_db();
     $error_msg = [];
 
     echo "<p>Updating DB. Please wait...</p>";
 
-    $ydb->beginTransaction();
-
     $queries = array(
-        'database charset'  => sprintf('ALTER DATABASE %s CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;', YOURLS_DB_NAME),
-        'options charset'   => sprintf('ALTER TABLE %s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;', YOURLS_DB_TABLE_OPTIONS),
-        'short URL charset' => sprintf('ALTER TABLE %s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;', YOURLS_DB_TABLE_URL),
-        'short URL varchar' => sprintf("ALTER TABLE %s CHANGE `keyword` `keyword` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '';", YOURLS_DB_TABLE_URL),
-        'short URL type'    => sprintf("ALTER TABLE %s CHANGE `url` `url` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;", YOURLS_DB_TABLE_URL),
-        'short URL type'    => sprintf("ALTER TABLE %s CHANGE `title` `title` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", YOURLS_DB_TABLE_URL),
+        'database charset'     => sprintf('ALTER DATABASE `%s` CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;', YOURLS_DB_NAME),
+        'options charset'      => sprintf('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;', YOURLS_DB_TABLE_OPTIONS),
+        'short URL varchar'    => sprintf("ALTER TABLE `%s` CHANGE `keyword` `keyword` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '';", YOURLS_DB_TABLE_URL),
+        'short URL type url'   => sprintf("ALTER TABLE `%s` CHANGE `url` `url` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;", YOURLS_DB_TABLE_URL),
+        'short URL type title' => sprintf("ALTER TABLE `%s` CHANGE `title` `title` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", YOURLS_DB_TABLE_URL),
+        'short URL charset'    => sprintf('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;', YOURLS_DB_TABLE_URL),
     );
 
     foreach($queries as $what => $query) {
         try {
             $ydb->perform($query);
         } catch (\Exception $e) {
-            $error_msg[] = $e ->getMessage();
+            $error_msg[] = $e->getMessage();
         }
     }
 
-    $result = $ydb->commit();
-
-    if( $error_msg or $result === false ) {
+    if( $error_msg ) {
         echo "<p class='error'>Unable to update the DB.</p>";
         echo "<p>You will have to manually fix things, sorry for the inconvenience :(</p>";
         echo "<p>The errors were:

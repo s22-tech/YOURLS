@@ -35,11 +35,14 @@ function yourls_get_database_version() {
 }
 
 /**
- * Check if PHP > 5.6
+ * Check if PHP > 7.2
+ *
+ * As of 1.8 we advertise YOURLS as being 7.4+ but it should work on 7.2 (although untested)
+ * so we don't want to strictly enforce a limitation that may not be necessary.
  *
  */
 function yourls_check_php_version() {
-    return version_compare( PHP_VERSION, '5.6.0', '>=' );
+    return version_compare( PHP_VERSION, '7.2.0', '>=' );
 }
 
 /**
@@ -217,7 +220,7 @@ function yourls_create_sql_tables() {
          'PRIMARY KEY (`keyword`),'.
          'KEY `ip` (`ip`),'.
          'KEY `timestamp` (`timestamp`)'.
-        ') DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
+        ') DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;';
 
 	$create_tables[YOURLS_DB_TABLE_OPTIONS] =
 		'CREATE TABLE IF NOT EXISTS `'.YOURLS_DB_TABLE_OPTIONS.'` ('.
